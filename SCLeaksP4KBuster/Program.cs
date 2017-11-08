@@ -17,6 +17,18 @@ namespace SCLeaksP4KBuster
             byte[] headerIdentifier = { 0x50, 0x4B, 0x03, 0x14 };
             long currentChunk = 0;
 
+            if (File.Exists(".\\lastChunk.txt"))
+            {
+                using (var stream = File.Open(".\\lastChunk.txt", FileMode.Open))
+                {
+                    byte[] chunkFileData = new byte[stream.Length];
+                    stream.Read(chunkFileData, 0, (int) stream.Length);
+                    currentChunk = Int64.Parse(Encoding.ASCII.GetString(chunkFileData));
+                    byte[] garbage = new byte[currentChunk * 16];
+                    fs.Read(garbage, 0, (int)currentChunk * 16);
+                }
+            }
+
             do
             {
                 //Read bytes from the file with offset currentChunk and save to buffer
@@ -32,13 +44,22 @@ namespace SCLeaksP4KBuster
                     //Header identified, proceding to determine compression method
                     byte[] compressionMethodBytes = new byte[2];
                     Array.Copy(buffer, 8, compressionMethodBytes, 0, 2);
-                    ProcessFile(fs, buffer, currentChunk, compressionMethodBytes);
+                    currentChunk = ProcessFile(fs, buffer, currentChunk, compressionMethodBytes);
+                    using (FileStream fs3 = new FileStream("lastChunk.txt", FileMode.Create, FileAccess.Write))
+                    {
+                        fs3.Write(Encoding.ASCII.GetBytes(currentChunk.ToString()), 0, Encoding.ASCII.GetBytes(currentChunk.ToString()).Length);
+                    }
                 }
             }
-            while (currentChunk <= fs.Length/16);
+            while (currentChunk <= fs.Length / 16);
+
+            if (File.Exists(".\\lastChunk.txt"))
+            {
+                File.Delete(".\\lastChunk.txt");
+            }
         }
 
-        static void ProcessFile(FileStream fs, byte[] buffer, long currentChunk, byte[] compressionMethodBytes)
+        static long ProcessFile(FileStream fs, byte[] buffer, long currentChunk, byte[] compressionMethodBytes)
         {
             fs.Read(buffer, 0, 16);
             currentChunk++;
@@ -79,9 +100,9 @@ namespace SCLeaksP4KBuster
                 }
             }
 
-            string fileName = System.Text.Encoding.ASCII.GetString(fileNameBytes);
+            string fileName = Encoding.ASCII.GetString(fileNameBytes);
 
-            long extraFieldChunks = (int) Math.Ceiling((decimal)(extraFieldSize) / 16) - 1;
+            long extraFieldChunks = (int)Math.Ceiling((decimal)(extraFieldSize) / 16) - 1;
             long extraFieldChunkStart = currentChunk;
 
             //Get the file size
@@ -90,7 +111,7 @@ namespace SCLeaksP4KBuster
 
             if (lastCharIndex < 3 && lastCharIndex >= 0)
             {
-                Array.Copy(buffer, lastCharIndex + 13, fileSizeBytes, 0, 3-lastCharIndex);
+                Array.Copy(buffer, lastCharIndex + 13, fileSizeBytes, 0, 3 - lastCharIndex);
                 fs.Read(buffer, 0, 16);
                 currentChunk++;
                 Array.Copy(buffer, 0, fileSizeBytes, 3 - lastCharIndex, lastCharIndex + 1);
@@ -104,6 +125,7 @@ namespace SCLeaksP4KBuster
             else
             {
                 fs.Read(buffer, 0, 16);
+                currentChunk++;
                 extraFieldChunkStart = currentChunk;
                 Array.Copy(buffer, 12, fileSizeBytes, 0, 4);
             }
@@ -118,11 +140,13 @@ namespace SCLeaksP4KBuster
             long garbageLength = extraFieldChunks - chunkOffset;
 
             byte[] garbage = new byte[garbageLength * 16];
-            fs.Read(garbage, 0, (int) garbageLength * 16);
+            fs.Read(garbage, 0, (int)garbageLength * 16);
+            currentChunk+=garbageLength;
 
             byte[] file = new byte[fileSize];
             fs.Read(file, 0, fileSize);
             fs.Read(garbage, 0, 16 - (fileSize % 16));
+            currentChunk += (fileSize + (16 - (fileSize % 16)))/16;
 
             byte[] decompFile = null;
 
@@ -139,11 +163,12 @@ namespace SCLeaksP4KBuster
                             fs2.Write(decompFile, 0, decompFile.Length);
                         }
                     }
-                    catch (ZstdException)
+                    catch (ZstdException e)
                     {
                         Console.WriteLine("Skipping the following file because it is broken. Size code: " + BitConverter.ToString(fileSizeBytes));
                         Console.WriteLine("Last char index: " + lastCharIndex);
-                        Console.ReadLine();
+                        Console.WriteLine("Error: " + e.Message);
+                        //Console.ReadLine();
                     }
                 }
             }
@@ -159,6 +184,7 @@ namespace SCLeaksP4KBuster
 
             Console.WriteLine(fileName);
             Console.WriteLine(fileSize + " Bytes");
+            return currentChunk;
         }
     }
 }
