@@ -16,7 +16,6 @@ namespace SCLeaksP4KBuster
             FileStream fs = new FileStream(".\\Data.p4k", FileMode.Open, FileAccess.Read);
             byte[] headerIdentifier = { 0x50, 0x4B, 0x03, 0x14 };
             long currentChunk = 0;
-
             if (File.Exists(".\\lastChunk.txt"))
             {
                 using (var stream = File.Open(".\\lastChunk.txt", FileMode.Open))
@@ -24,8 +23,7 @@ namespace SCLeaksP4KBuster
                     byte[] chunkFileData = new byte[stream.Length];
                     stream.Read(chunkFileData, 0, (int) stream.Length);
                     currentChunk = Int64.Parse(Encoding.ASCII.GetString(chunkFileData));
-                    byte[] garbage = new byte[currentChunk * 16];
-                    fs.Read(garbage, 0, (int)currentChunk * 16);
+                    fs.Seek(currentChunk * 16, SeekOrigin.Begin);
                 }
             }
 
@@ -149,6 +147,8 @@ namespace SCLeaksP4KBuster
             currentChunk += (fileSize + (16 - (fileSize % 16)))/16;
 
             byte[] decompFile = null;
+            Console.WriteLine(fileName);
+            Console.WriteLine(fileSize + " Bytes");
 
             if (BitConverter.ToInt16(compressionMethodBytes, 0) == 0x64)
             {
@@ -157,7 +157,9 @@ namespace SCLeaksP4KBuster
                     try
                     {
                         decompFile = decompressor.Unwrap(file);
-                        Directory.CreateDirectory(Path.GetDirectoryName(fileName));
+                        if (Path.GetDirectoryName(fileName) != "")
+                            Directory.CreateDirectory(Path.GetDirectoryName(fileName));
+
                         using (FileStream fs2 = new FileStream(fileName, FileMode.Create, FileAccess.Write))
                         {
                             fs2.Write(decompFile, 0, decompFile.Length);
@@ -175,15 +177,14 @@ namespace SCLeaksP4KBuster
             else
             {
                 decompFile = file;
-                Directory.CreateDirectory(Path.GetDirectoryName(fileName));
+                if (Path.GetDirectoryName(fileName) != "")
+                    Directory.CreateDirectory(Path.GetDirectoryName(fileName));
                 using (FileStream fs2 = new FileStream(fileName, FileMode.Create, FileAccess.Write))
                 {
                     fs2.Write(decompFile, 0, decompFile.Length);
                 }
             }
-
-            Console.WriteLine(fileName);
-            Console.WriteLine(fileSize + " Bytes");
+            
             return currentChunk;
         }
     }
