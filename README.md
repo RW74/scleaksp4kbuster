@@ -12,6 +12,7 @@ Place SCLeaksP4KBuster.exe, libzstd.dll and ZstdNet.dll next to your Data.p4k fi
 > **Note:**
 >
 > - The Data.p4k file is already really big when compressed and uncompressed it is even bigger, make sure you have enough disk space to perform the whole extraction before starting (around 150GB should be on the safe size but it might vary as CIG releases new versions of the game).
+> - It is highly recommended but not a requirement to use a high speed storage device such as an SSD when extracting these files as it can take several hours to extract.
 > 
 ## Credits
 
