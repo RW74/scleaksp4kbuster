@@ -16,13 +16,20 @@ namespace SCLeaksP4KBuster
             FileStream fs = new FileStream(".\\Data.p4k", FileMode.Open, FileAccess.Read);
             byte[] headerIdentifier = { 0x50, 0x4B, 0x03, 0x14 };
             long currentChunk = 0;
+            long chunkLength = (fs.Length / 16);
+            int firstTick = System.Environment.TickCount;
+            int lastTick = firstTick;
+            long firstChunk = 0;
+            double chunkEta = 0;
+
             if (File.Exists(".\\lastChunk.txt"))
             {
                 using (var stream = File.Open(".\\lastChunk.txt", FileMode.Open))
                 {
                     byte[] chunkFileData = new byte[stream.Length];
                     stream.Read(chunkFileData, 0, (int) stream.Length);
-                    currentChunk = Int64.Parse(Encoding.ASCII.GetString(chunkFileData));
+                    long.TryParse(Encoding.ASCII.GetString(chunkFileData), out currentChunk);
+                    firstChunk = currentChunk;
                     fs.Seek(currentChunk * 16, SeekOrigin.Begin);
                 }
             }
@@ -46,8 +53,31 @@ namespace SCLeaksP4KBuster
                     using (FileStream fs3 = new FileStream("lastChunk.txt", FileMode.Create, FileAccess.Write))
                     {
                         fs3.Write(Encoding.ASCII.GetBytes(currentChunk.ToString()), 0, Encoding.ASCII.GetBytes(currentChunk.ToString()).Length);
+                        
+                        //calculate time remaining and print progress
+                        double chunkPercent = (((double)currentChunk / chunkLength) * 100);
+                        if ((System.Environment.TickCount - lastTick) > 1000)
+                        {
+                            chunkEta = ((double) chunkLength / ((currentChunk - firstChunk) / (System.Environment.TickCount - firstTick) * 1000));
+                            lastTick = System.Environment.TickCount;
+                        }
+                        double timePassed = ((System.Environment.TickCount - firstTick)/1000);
+                        double minuteEta = (chunkEta / 60) - (timePassed / 60);
+                        double secondEta = (chunkEta % 60) - (timePassed % 60);
+                        if (secondEta < 0)
+                        {
+                            secondEta = 60 + secondEta;
+                            minuteEta--;
+                        }
+                        Console.Write("\r" + chunkPercent.ToString("0.000")
+                            + "% (" + currentChunk + "/" + chunkLength + ") "
+                            + minuteEta.ToString("0") + ":" + secondEta.ToString("00") + " Time Remaining ("
+                            + (timePassed / 60).ToString("0") + ":" + (timePassed % 60).ToString("00") + " Passed)    "
+                            );
                     }
                 }
+
+                
             }
             while (currentChunk <= fs.Length / 16);
 
@@ -147,8 +177,8 @@ namespace SCLeaksP4KBuster
             currentChunk += (fileSize + (16 - (fileSize % 16)))/16;
 
             byte[] decompFile = null;
-            Console.WriteLine(fileName);
-            Console.WriteLine(fileSize + " Bytes");
+            //Console.WriteLine(fileName);
+            //Console.WriteLine(fileSize + " Bytes");
 
             if (BitConverter.ToInt16(compressionMethodBytes, 0) == 0x64)
             {
@@ -156,33 +186,33 @@ namespace SCLeaksP4KBuster
                 {
                     try
                     {
-                        decompFile = decompressor.Unwrap(file);
+                        decompFile = decompressor.Unwrap(file);                       
                         if (Path.GetDirectoryName(fileName) != "")
                             Directory.CreateDirectory(Path.GetDirectoryName(fileName));
-
+                        
                         using (FileStream fs2 = new FileStream(fileName, FileMode.Create, FileAccess.Write))
                         {
                             fs2.Write(decompFile, 0, decompFile.Length);
-                        }
+                        }                        
                     }
                     catch (ZstdException e)
                     {
-                        Console.WriteLine("Skipping the following file because it is broken. Size code: " + BitConverter.ToString(fileSizeBytes));
-                        Console.WriteLine("Last char index: " + lastCharIndex);
-                        Console.WriteLine("Error: " + e.Message);
+                        Console.Write("\rSkipping the following file because it is broken. Size code: " + BitConverter.ToString(fileSizeBytes));
+                        Console.Write("\nLast char index: " + lastCharIndex);
+                        Console.Write("\nError: " + e.Message + "\n");
                         //Console.ReadLine();
                     }
                 }
             }
             else
-            {
-                decompFile = file;
+            {                
+                decompFile = file;               
                 if (Path.GetDirectoryName(fileName) != "")
-                    Directory.CreateDirectory(Path.GetDirectoryName(fileName));
+                    Directory.CreateDirectory(Path.GetDirectoryName(fileName));                
                 using (FileStream fs2 = new FileStream(fileName, FileMode.Create, FileAccess.Write))
                 {
                     fs2.Write(decompFile, 0, decompFile.Length);
-                }
+                }    
             }
             
             return currentChunk;
